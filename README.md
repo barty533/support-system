@@ -95,7 +95,7 @@ echo %ANTHROPIC_API_KEY%
 
 **1. Clone the repository**
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/barty533/support-system
 cd support-agents
 ```
 

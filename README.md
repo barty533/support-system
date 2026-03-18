@@ -1,6 +1,6 @@
 # AutoPrime — Conversational AI Support System
 
-A multi-agent conversational support system for a car dealership, built in Java using the Anthropic Claude API. Agent orchestration is implemented manually without any agentic frameworks.
+A multi-agent conversational support system for a car dealership, built in Java using the Anthropic Claude API.
 
 ---
 

@@ -19,7 +19,11 @@ public class ClaudeClient {
     private static final String API_URL = "https://api.anthropic.com/v1/messages";
     private static final MediaType JSON_TYPE = MediaType.get("application/json");
 
-    private final OkHttpClient http = new OkHttpClient();
+    private final OkHttpClient http = new OkHttpClient.Builder()
+            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .build();
     private final ObjectMapper mapper = new ObjectMapper();
     private final String apiKey;
 

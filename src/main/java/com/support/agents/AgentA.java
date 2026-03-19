@@ -15,11 +15,13 @@ import java.util.stream.Collectors;
 
 /**
  * Agent A – Technical Specialist.
- * Answers ONLY from retrieved documentation chunks.
  *
- * Uses TF-IDF retrieval for most queries, with a keyword-based fallback
- * that forces vehicle-inventory.md into context when the user is browsing
- * stock but uses everyday words ("cars", "sale") that don't appear in the doc.
+ * Answers ONLY from retrieved documentation chunks.
+ * Uses semantic similarity search (embeddings) to find relevant content.
+ *
+ * A keyword fallback ensures the vehicle inventory doc is always included
+ * when the user is browsing stock, since everyday words like "cars" or "sale"
+ * may score lower than technical terms even with semantic search.
  */
 public class AgentA {
 
@@ -39,14 +41,18 @@ public class AgentA {
         5. Be clear, accurate, and concise.
         """;
 
-    // Words that signal the user wants to browse inventory but won't match
-    // the doc's vocabulary ("vehicles", "stock") via TF-IDF
+    // Inventory browse keywords — ensures inventory doc is included even when
+    // semantic similarity scores it lower than technical docs
+    // Only specific browsing-intent words and make/model names — deliberately
+    // excludes generic words like "car", "have", "need" which appear in all
+    // kinds of questions and would cause false inventory matches
     private static final Set<String> INVENTORY_KEYWORDS = Set.of(
-        "car", "cars", "sale", "buy", "purchase", "available", "have",
-        "show", "list", "looking", "need", "want", "get", "find",
-        "sedan", "suv", "truck", "van", "electric", "hybrid",
+        "inventory", "stock", "sale", "buy", "purchase",
+        "show", "list", "browse", "available", "instock",
+        "sedan", "suv", "truck", "van", "electric", "hybrid", "preowned",
         "honda", "toyota", "ford", "hyundai", "kia", "mazda",
-        "chevrolet", "chevy", "tesla", "new", "used", "preowned"
+        "chevrolet", "chevy", "tesla", "camry", "rav4", "tacoma",
+        "f150", "explorer", "tucson", "telluride", "ioniq", "mache"
     );
 
     private static final String INVENTORY_DOC = "vehicle-inventory.md";
@@ -61,19 +67,24 @@ public class AgentA {
 
     public String handle(String userMessage, ConversationHistory history) throws IOException {
 
-        // 1. TF-IDF retrieval
+        // 1. Semantic similarity retrieval
         List<Chunk> relevant = new ArrayList<>(docs.retrieve(userMessage));
 
-        // 2. Keyword fallback: if inventory doc is not already in results
-        //    but the query looks like an inventory browse, force-include it
-        boolean inventoryAlreadyIncluded = relevant.stream()
-                .anyMatch(c -> c.filename().equals(INVENTORY_DOC));
+        // 2. If query is clearly technical (repair/fault/maintenance), remove
+        //    inventory chunks since they are irrelevant and score too broadly
+        if (isTechnicalQuery(userMessage)) {
+            relevant.removeIf(c -> c.filename().equals(INVENTORY_DOC));
+            System.out.println("[AgentA] Technical query detected — excluded inventory doc");
+        }
 
-        if (!inventoryAlreadyIncluded && isInventoryQuery(userMessage)) {
+        // 3. Inventory browsing: replace results entirely with all inventory chunks
+        //    so no section (trucks, EVs etc.) gets cut off by the TOP_K limit
+        if (isInventoryQuery(userMessage) && !isTechnicalQuery(userMessage)) {
             List<Chunk> inventoryChunks = docs.getChunksFromFile(INVENTORY_DOC);
-            System.out.println("[AgentA] Keyword fallback: adding "
-                    + inventoryChunks.size() + " chunk(s) from " + INVENTORY_DOC);
-            relevant.addAll(0, inventoryChunks); // prepend so they appear first
+            System.out.println("[AgentA] Inventory query — using all "
+                    + inventoryChunks.size() + " inventory chunk(s)");
+            relevant.clear();
+            relevant.addAll(inventoryChunks);
         }
 
         System.out.println("[AgentA] Final chunks (" + relevant.size() + "):");
@@ -103,11 +114,27 @@ public class AgentA {
         return reply;
     }
 
-    /** Returns true if the query contains any inventory-browse keyword. */
     private boolean isInventoryQuery(String message) {
         String lower = message.toLowerCase().replaceAll("[^a-z0-9\\s]", " ");
         for (String token : lower.split("\\s+")) {
             if (INVENTORY_KEYWORDS.contains(token)) return true;
+        }
+        return false;
+    }
+
+    // Words that indicate a technical/service question — not inventory browsing
+    private static final Set<String> TECHNICAL_KEYWORDS = Set.of(
+        "start", "starting", "wont", "broken", "fix", "repair", "problem",
+        "issue", "fault", "error", "light", "warning", "noise", "leak",
+        "smoke", "overheat", "battery", "engine", "transmission", "brake",
+        "tyre", "tire", "oil", "fluid", "maintenance", "service", "check",
+        "diagnostic", "code", "rpm", "stall", "idle", "vibration", "shake"
+    );
+
+    private boolean isTechnicalQuery(String message) {
+        String lower = message.toLowerCase().replaceAll("[^a-z0-9\\s]", " ");
+        for (String token : lower.split("\\s+")) {
+            if (TECHNICAL_KEYWORDS.contains(token)) return true;
         }
         return false;
     }

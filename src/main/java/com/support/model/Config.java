@@ -15,13 +15,13 @@ public final class Config {
     public static final int ROUTER_MAX_TOKENS = 20;
 
     // Max tokens for agent responses
-    public static final int AGENT_MAX_TOKENS = 1024;
+    public static final int AGENT_MAX_TOKENS = 2048;
 
     // Number of top document chunks to retrieve per query
     public static final int RAG_TOP_K = 4;
 
     // Number of lines per document chunk
-    public static final int RAG_CHUNK_SIZE_LINES = 20;
+    public static final int RAG_CHUNK_SIZE_LINES = 80;
 
     // Maximum tool-calling iterations for Agent B
     public static final int MAX_TOOL_ITERATIONS = 6;
@@ -30,8 +30,9 @@ public final class Config {
     public static final int HTTP_MAX_RETRIES = 3;
     public static final long HTTP_RETRY_BASE_DELAY_MS = 1000;
 
-
-    // Docs directory (relative to working directory)
-    public static final String DOCS_PATH_ENV = "DOCS_PATH";
-    public static final String DOCS_PATH_DEFAULT = "docs";
+    // Environment variable names
+    public static final String ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY";
+    public static final String VOYAGE_API_KEY_ENV    = "VOYAGE_API_KEY";
+    public static final String DOCS_PATH_ENV         = "DOCS_PATH";
+    public static final String DOCS_PATH_DEFAULT     = "docs";
 }

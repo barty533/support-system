@@ -1,6 +1,8 @@
 # AutoPrime — Conversational AI Support System
 
-A multi-agent conversational support system for a car dealership, built in Java using the Anthropic Claude API.
+
+A multi-agent conversational support system for a car dealership, built in Java using the Anthropic Claude API
+
 
 ---
 
@@ -14,7 +16,7 @@ Orchestrator (Router)
  │  Classifies each message into: TECHNICAL | BILLING | OTHER
  │
  ├─► Agent A – Technical Specialist
- │       Retrieves relevant sections from local documentation files (RAG).
+ │       Retrieves relevant sections using semantic similarity search (embeddings).
  │       Answers strictly based on retrieved content — no outside knowledge.
  │
  ├─► Agent B – Finance & Billing Specialist
@@ -33,35 +35,47 @@ Full conversation history is maintained across all turns and agent switches.
 
 - Java 17 or higher
 - Maven 3.8 or higher
-- An Anthropic API key — obtain one at [console.anthropic.com](https://console.anthropic.com)
+- An Anthropic API key 
+- A Voyage AI API key 
 
 ---
 
-## Setting Up Your API Key
+## Setting Up Your API Keys
 
-The application reads the Anthropic API key from the `ANTHROPIC_API_KEY` environment variable.
+The application requires two API keys set as environment variables.
+
+### What each key is for
+
+| Key | Purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Powers the router and both agents via Claude |
+| `VOYAGE_API_KEY` | Embeds documentation chunks and queries for semantic search |
 
 ### macOS / Linux
 
-**Session only** (key is lost when the terminal is closed):
+**Session only** (keys are lost when the terminal is closed):
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-your-key-here
+export VOYAGE_API_KEY=pa-your-voyage-key-here
 ```
 
 **Permanent** (persists across all future sessions):
 ```bash
 # For Zsh (default on macOS Catalina and later):
 echo 'export ANTHROPIC_API_KEY=sk-ant-your-key-here' >> ~/.zshrc
+echo 'export VOYAGE_API_KEY=pa-your-voyage-key-here' >> ~/.zshrc
 source ~/.zshrc
 
 # For Bash:
 echo 'export ANTHROPIC_API_KEY=sk-ant-your-key-here' >> ~/.bashrc
+echo 'export VOYAGE_API_KEY=pa-your-voyage-key-here' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-Verify the key is set:
+Verify the keys are set:
 ```bash
 echo $ANTHROPIC_API_KEY
+echo $VOYAGE_API_KEY
 ```
 
 ### Windows
@@ -69,11 +83,13 @@ echo $ANTHROPIC_API_KEY
 **Session only — Command Prompt:**
 ```cmd
 set ANTHROPIC_API_KEY=sk-ant-your-key-here
+set VOYAGE_API_KEY=pa-your-voyage-key-here
 ```
 
 **Session only — PowerShell:**
 ```powershell
 $env:ANTHROPIC_API_KEY="sk-ant-your-key-here"
+$env:VOYAGE_API_KEY="pa-your-voyage-key-here"
 ```
 
 **Permanent — via System Settings (recommended):**
@@ -81,12 +97,13 @@ $env:ANTHROPIC_API_KEY="sk-ant-your-key-here"
 2. Click **Edit the system environment variables**.
 3. In the System Properties window click **Environment Variables**.
 4. Under **User variables** click **New**.
-5. Set the variable name to `ANTHROPIC_API_KEY` and the value to your key.
+5. Add `ANTHROPIC_API_KEY` with your Anthropic key, then repeat for `VOYAGE_API_KEY`.
 6. Click OK on all windows. Restart any open terminals for the change to take effect.
 
-Verify the key is set (Command Prompt):
+Verify the keys are set (Command Prompt):
 ```cmd
 echo %ANTHROPIC_API_KEY%
+echo %VOYAGE_API_KEY%
 ```
 
 ---
@@ -99,7 +116,7 @@ git clone https://github.com/barty533/support-system
 cd support-agents
 ```
 
-**2. Set your API key** — see instructions above
+**2. Set your API keys** — see instructions above
 
 **3. Build**
 ```bash
@@ -113,13 +130,14 @@ The jar must be executed from the `support-agents` directory so it can locate th
 java -jar target/support-agents-1.0.0-jar-with-dependencies.jar
 ```
 
-Type a message and press Enter. Type `exit` to end the session.
+On startup the application will embed all documentation chunks via Voyage AI — this takes a few seconds and only happens once per session. Type a message and press Enter. Type `exit` to end the session.
 
 ---
 
-## Agent A — Technical Specialist (RAG)
+## Agent A — Technical Specialist (Semantic RAG)
 
-Answers questions using only content retrieved from the following documentation files:
+Answers questions using only content retrieved from the following documentation files.
+At startup all chunks are embedded into vectors using Voyage AI. Each query is also embedded and compared against all chunk vectors using cosine similarity to find the most semantically relevant content:
 
 | File | Contents |
 |------|---------|
@@ -186,7 +204,7 @@ Available customer accounts for testing:
 You: What trucks do you have in stock?
 
 [Orchestrator] Routing intent: TECHNICAL
-[AgentA] Retrieved 4 chunk(s): vehicle-inventory.md
+[AgentA] Final chunks (4): vehicle-inventory.md
 
 Support: We currently have the following new trucks in stock:
   - Ford F-150 XLT 2025 — Oxford White | 3.5L EcoBoost V6 | Towing: 13,000 lbs | $43,500
@@ -287,7 +305,7 @@ support-agents/
 │   ├── Main.java                        # Entry point and conversation loop
 │   ├── Orchestrator.java                # Intent classification and routing
 │   ├── agents/
-│   │   ├── AgentA.java                  # Technical Specialist (RAG)
+│   │   ├── AgentA.java                  # Technical Specialist (semantic RAG)
 │   │   └── AgentB.java                  # Finance & Billing Specialist (tool-calling)
 │   ├── model/
 │   │   ├── Config.java                  # Centralised configuration constants
@@ -295,7 +313,8 @@ support-agents/
 │   │   ├── ClaudeClient.java            # Anthropic API HTTP client with retry logic
 │   │   └── ConversationHistory.java     # Multi-turn message store
 │   ├── rag/
-│   │   └── DocumentStore.java           # Document loader and TF-IDF retrieval (cached IDF)
+│   │   ├── DocumentStore.java           # Document loader and semantic similarity search
+│   │   └── EmbeddingClient.java         # Voyage AI embeddings API client
 │   └── tools/
 │       └── BillingTools.java            # Tool definitions and mock backend functions
 └── pom.xml
@@ -307,10 +326,10 @@ support-agents/
 
 - **Agent A** answers exclusively from retrieved documentation. If no relevant chunk is found, it declines rather than guessing.
 - **Agent B** answers exclusively from tool output using the correct Anthropic `tool_result` content block format. Its system prompt explicitly forbids answering from internal knowledge.
+- **Semantic RAG** — document chunks are embedded into vectors at startup using Voyage AI (`voyage-3` model). At query time the query is also embedded and cosine similarity is computed against all chunk vectors. This understands meaning rather than matching exact words — so "car won't start" correctly retrieves documentation about "battery failure".
 - **Manual orchestration** — routing, the RAG pipeline, and the tool-calling loop are all implemented directly in Java without any agentic libraries.
-- **Cached IDF** — document IDF scores are computed once at startup and cached, avoiding redundant recalculation on every query.
-- **Typed messages** — conversation messages use a `Message` record instead of raw `Map<String, String>`, improving type safety and readability.
+- **Typed messages** — conversation messages use a `Message` record instead of raw `Map<String, String>`.
 - **Centralised config** — model name, token limits, retry settings, and RAG parameters are all defined in `Config.java`.
-- **Retry logic** — the API client retries automatically on 429 (rate limit) and 5xx (server error) responses using exponential backoff.
+- **Retry logic** — the API client retries automatically on 429 and 5xx responses using exponential backoff.
 - **Context-aware routing** — the router receives the last two conversation turns so follow-up replies such as a customer providing their name are classified correctly.
 - **Context preservation** — full conversation history is included in every agent call, enabling coherent multi-turn dialogue across agent switches.

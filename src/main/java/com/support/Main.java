@@ -6,6 +6,7 @@ import com.support.model.ClaudeClient;
 import com.support.model.Config;
 import com.support.model.ConversationHistory;
 import com.support.rag.DocumentStore;
+import com.support.rag.EmbeddingClient;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -14,26 +15,41 @@ import java.util.Scanner;
 /**
  * Entry point for the AutoPrime conversational AI support system.
  *
- * Requires the ANTHROPIC_API_KEY environment variable to be set.
- * Documentation files must be in the docs/ directory relative to the working directory.
+ * Requires two environment variables:
+ *   ANTHROPIC_API_KEY — for Claude (routing + agents)
+ *   VOYAGE_API_KEY    — for Voyage AI (semantic document embeddings)
+ *
+ * Documentation files must be in the docs/ directory relative to
+ * the working directory.
  */
 public class Main {
 
     public static void main(String[] args) throws IOException {
 
-        String apiKey = System.getenv("ANTHROPIC_API_KEY");
-        if (apiKey == null || apiKey.isBlank()) {
+        // Read API keys
+        String anthropicKey = System.getenv(Config.ANTHROPIC_API_KEY_ENV);
+        if (anthropicKey == null || anthropicKey.isBlank()) {
             System.err.println("Error: ANTHROPIC_API_KEY environment variable is not set.");
             System.exit(1);
         }
 
+        String voyageKey = System.getenv(Config.VOYAGE_API_KEY_ENV);
+        if (voyageKey == null || voyageKey.isBlank()) {
+            System.err.println("Error: VOYAGE_API_KEY environment variable is not set.");
+            System.err.println("Get a free key at https://dash.voyageai.com");
+            System.exit(1);
+        }
+
+        // Load and embed documentation
         String docsPathStr = System.getenv().getOrDefault(
                 Config.DOCS_PATH_ENV, Config.DOCS_PATH_DEFAULT);
 
-        DocumentStore docs = new DocumentStore();
+        EmbeddingClient embeddingClient = new EmbeddingClient(voyageKey);
+        DocumentStore docs = new DocumentStore(embeddingClient);
         docs.loadDirectory(Paths.get(docsPathStr));
 
-        ClaudeClient claude       = new ClaudeClient(apiKey);
+        // Wire up agents
+        ClaudeClient claude       = new ClaudeClient(anthropicKey);
         AgentA agentA             = new AgentA(claude, docs);
         AgentB agentB             = new AgentB(claude);
         Orchestrator orchestrator = new Orchestrator(claude, agentA, agentB);
